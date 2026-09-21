@@ -20,90 +20,40 @@
 
 package com.cinemamod.mcef;
 
-import com.mojang.blaze3d.opengl.GlTexture;
-import com.mojang.blaze3d.textures.TextureFormat;
+import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.textures.AddressMode;
+import com.mojang.blaze3d.textures.FilterMode;
+import com.mojang.blaze3d.textures.GpuTexture;
+import com.mojang.blaze3d.textures.GpuTextureView;
 import net.minecraft.client.renderer.texture.AbstractTexture;
 
 /**
- * A more efficient texture implementation that directly wraps an existing OpenGL texture ID.
- * This bypasses the normal texture creation pipeline and allows us to use an existing texture
- * directly with Minecraft's rendering system.
+ * A thin {@link AbstractTexture} that points at the {@link GpuTexture}/{@link GpuTextureView}
+ * owned and updated by {@link MCEFRenderer}, so the browser's texture can be referenced by a
+ * {@link net.minecraft.resources.ResourceLocation} anywhere Minecraft's rendering APIs expect one
+ * (e.g. GuiGraphics#blit). MCEFDirectTexture does not own the backing texture's lifecycle --
+ * MCEFRenderer creates, resizes and closes it.
  */
 public class MCEFDirectTexture extends AbstractTexture {
-    private int width;
-    private int height;
-    
     public MCEFDirectTexture() {
-        this.defaultBlur = false;
     }
-    
+
     /**
-     * Directly set the texture to an existing OpenGL texture ID.
-     * This is more efficient than creating a new texture and copying data.
-     * 
-     * @param textureId The OpenGL texture ID to wrap
-     * @param width The width of the texture
-     * @param height The height of the texture
+     * Points this texture at MCEFRenderer's current backing texture/view.
      */
-    public void setDirectTextureId(int textureId, int width, int height) {
-        // If we already have a texture and it's not the same ID, don't close it
-        // (we don't own these textures, MCEFRenderer does)
-        
-        if (textureId > 0) {
-            // Create a custom GlTexture that wraps the existing ID
-            this.texture = new DirectGlTexture(textureId, width, height);
-            this.width = width;
-            this.height = height;
-        } else {
-            this.texture = null;
-        }
+    void setBackingTexture(GpuTexture texture, GpuTextureView textureView) {
+        this.texture = texture;
+        this.textureView = textureView;
+        // Crisp text/UI over smoothing, matching the browser's own pixels 1:1.
+        this.sampler = RenderSystem.getSamplerCache().getSampler(
+                AddressMode.CLAMP_TO_EDGE, AddressMode.CLAMP_TO_EDGE,
+                FilterMode.NEAREST, FilterMode.NEAREST, false);
     }
-    
-    public int getWidth() {
-        return width;
-    }
-    
-    public int getHeight() {
-        return height;
-    }
-    
+
     @Override
     public void close() {
-        // Don't close the texture - we don't own it
+        // Don't close the backing texture/view here -- MCEFRenderer owns and closes them.
         this.texture = null;
-    }
-    
-    /**
-     * Custom GlTexture implementation that wraps an existing OpenGL texture ID
-     * without managing its lifecycle.
-     */
-    private static class DirectGlTexture extends GlTexture {
-        private final int width;
-        private final int height;
-        
-        protected DirectGlTexture(int textureId, int width, int height) {
-            // Call parent constructor with dummy values, then override
-            super("MCEF Direct Texture", TextureFormat.RGBA8, width, height, 1, textureId);
-            this.width = width;
-            this.height = height;
-            // Mark as not closed
-            this.closed = false;
-        }
-        
-        @Override
-        public void close() {
-            // Don't actually delete the texture - we don't own it
-            this.closed = true;
-        }
-        
-        @Override
-        public int getWidth(int mipLevel) {
-            return width >> mipLevel;
-        }
-        
-        @Override
-        public int getHeight(int mipLevel) {
-            return height >> mipLevel;
-        }
+        this.textureView = null;
     }
 }

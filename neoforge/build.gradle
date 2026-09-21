@@ -1,5 +1,5 @@
 plugins {
-    id 'net.neoforged.gradle.userdev' version '7.0.+'
+    id 'net.neoforged.gradle.userdev' version '7.1.39'
     id 'com.matthewprenger.cursegradle' version "${cursegradle_version}"
     id 'com.github.johnrengelman.shadow' version "${shadow_version}"
     id 'maven-publish'
@@ -7,13 +7,22 @@ plugins {
 
 var mod_version = mcef_version
 
-archivesBaseName = project.archives_base_name
+base.archivesName = project.archives_base_name
 version = mod_version
 group = mod_packagename
 
 java.toolchain.languageVersion = JavaLanguageVersion.of(java_version as int)
 
 runs {
+    configureEach {
+        // Registers :neoforge's own compiled classes (including the jcef sources compiled
+        // into it) as belonging to the "mcef" mod layer, instead of NeoGradle's default of
+        // adding them to the game/library layer -- which caused a JPMS split-package error
+        // (org.cef.browser.mac claimed by both the "minecraft" and "mcef" modules) since our
+        // built mod jar on the classpath was then a second copy of the same package.
+        modSource project.sourceSets.main
+    }
+
     client {
         workingDirectory project.file('run')
     }
@@ -63,9 +72,9 @@ tasks.register('prepareWorkspace') {
 dependencies {
     implementation "net.neoforged:neoforge:${neoforge_version}"
 
-    implementation(project(':common')) {
-        transitive false
-    }
+    // Not depending on the :common jar itself (which would require its Fabric Loom
+    // build -- and thus Fabric intermediary mappings for this Minecraft version -- to
+    // succeed). :common's sources are compiled directly into this module below instead.
 }
 
 tasks.register('generateJava', Copy) {
@@ -91,7 +100,12 @@ processResources {
     from("${project(':common').projectDir}/src/main/resources")
 }
 
-tasks.withType(JavaCompile).configureEach {
+// NOTE: this must target the named compileJava task specifically, not
+// tasks.withType(JavaCompile).configureEach { } -- that also matches NeoGradle's own
+// internal Minecraft-recompile JavaCompile task, which would inject these same sources into
+// the "minecraft" module too and cause a JPMS split-package error (org.cef.browser.mac
+// claimed by both "mcef" and "minecraft") when the game starts.
+compileJava {
     source(project(':common').sourceSets.main.allSource)
     source(project(':common').sourceSets.jcef.allSource)
 }

@@ -22,12 +22,14 @@ package com.cinemamod.mcef.example;
 
 import com.cinemamod.mcef.MCEF;
 import com.cinemamod.mcef.MCEFBrowser;
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.renderer.RenderType;
+import net.minecraft.client.input.CharacterEvent;
+import net.minecraft.client.input.KeyEvent;
+import net.minecraft.client.input.MouseButtonEvent;
+import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 
 public class ExampleScreen extends Screen {
 
@@ -73,8 +75,8 @@ public class ExampleScreen extends Screen {
     }
 
     @Override
-    public void resize(Minecraft minecraft, int i, int j) {
-        super.resize(minecraft, i, j);
+    public void resize(int i, int j) {
+        super.resize(i, j);
         resizeBrowser();
     }
 
@@ -85,40 +87,40 @@ public class ExampleScreen extends Screen {
     }
 
     @Override
-    public void render(GuiGraphics guiGraphics, int mouseX, int mouseY, float partial) {
+    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partial) {
 
-        super.render(guiGraphics, mouseX, mouseY, partial);
-        
+        super.extractRenderState(graphics, mouseX, mouseY, partial);
+
         // Check if the browser texture is ready for rendering
         if (browser != null && browser.isTextureReady()) {
-            renderBrowserTexture(guiGraphics);
+            renderBrowserTexture(graphics);
         }
 
     }
-    
-    private void renderBrowserTexture(GuiGraphics guiGraphics) {
 
-        // Get the ResourceLocation for the browser texture
-        ResourceLocation textureLocation = browser.getTextureLocation();
+    private void renderBrowserTexture(GuiGraphicsExtractor graphics) {
+
+        // Get the Identifier for the browser texture
+        Identifier textureLocation = browser.getTextureLocation();
 
         int frameRenderWidth = width - BROWSER_DRAW_OFFSET * 2;
         int frameRenderHeight = height - BROWSER_DRAW_OFFSET * 2;
-        guiGraphics.blit(RenderType::guiTextured, textureLocation, BROWSER_DRAW_OFFSET, BROWSER_DRAW_OFFSET, 0.0F, 0.0F, frameRenderWidth, frameRenderHeight, frameRenderWidth, frameRenderHeight);
+        graphics.blit(RenderPipelines.GUI_TEXTURED, textureLocation, BROWSER_DRAW_OFFSET, BROWSER_DRAW_OFFSET, 0.0F, 0.0F, frameRenderWidth, frameRenderHeight, frameRenderWidth, frameRenderHeight);
 
     }
 
     @Override
-    public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        browser.sendMousePress(mouseX(mouseX), mouseY(mouseY), button);
+    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        browser.sendMousePress(mouseX(event.x()), mouseY(event.y()), event.button());
         browser.setFocus(true);
-        return super.mouseClicked(mouseX, mouseY, button);
+        return super.mouseClicked(event, doubleClick);
     }
 
     @Override
-    public boolean mouseReleased(double mouseX, double mouseY, int button) {
-        browser.sendMouseRelease(mouseX(mouseX), mouseY(mouseY), button);
+    public boolean mouseReleased(MouseButtonEvent event) {
+        browser.sendMouseRelease(mouseX(event.x()), mouseY(event.y()), event.button());
         browser.setFocus(true);
-        return super.mouseReleased(mouseX, mouseY, button);
+        return super.mouseReleased(event);
     }
 
     @Override
@@ -128,8 +130,8 @@ public class ExampleScreen extends Screen {
     }
 
     @Override
-    public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
-        return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
+    public boolean mouseDragged(MouseButtonEvent event, double dragX, double dragY) {
+        return super.mouseDragged(event, dragX, dragY);
     }
 
     @Override
@@ -139,25 +141,26 @@ public class ExampleScreen extends Screen {
     }
 
     @Override
-    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        browser.sendKeyPress(keyCode, scanCode, modifiers);
+    public boolean keyPressed(KeyEvent event) {
+        browser.sendKeyPress(event.key(), event.scancode(), event.modifiers());
         browser.setFocus(true);
-        return super.keyPressed(keyCode, scanCode, modifiers);
+        return super.keyPressed(event);
     }
 
     @Override
-    public boolean keyReleased(int keyCode, int scanCode, int modifiers) {
-        browser.sendKeyRelease(keyCode, scanCode, modifiers);
+    public boolean keyReleased(KeyEvent event) {
+        browser.sendKeyRelease(event.key(), event.scancode(), event.modifiers());
         browser.setFocus(true);
-        return super.keyReleased(keyCode, scanCode, modifiers);
+        return super.keyReleased(event);
     }
 
     @Override
-    public boolean charTyped(char codePoint, int modifiers) {
-        if (codePoint == (char) 0) return false;
-        browser.sendKeyTyped(codePoint, modifiers);
+    public boolean charTyped(CharacterEvent event) {
+        if (event.codepoint() == 0) return false;
+        // CharacterEvent no longer carries modifiers; typed-character handling never used them here.
+        browser.sendKeyTyped((char) event.codepoint(), 0);
         browser.setFocus(true);
-        return super.charTyped(codePoint, modifiers);
+        return super.charTyped(event);
     }
 
 }

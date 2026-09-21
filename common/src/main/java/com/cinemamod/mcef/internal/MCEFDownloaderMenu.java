@@ -20,13 +20,13 @@
 
 package com.cinemamod.mcef.internal;
 
-import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.TitleScreen;
 import net.minecraft.network.chat.Component;
+import org.joml.Matrix3x2fStack;
 
 public class MCEFDownloaderMenu extends Screen {
     private final Screen menu;
@@ -37,20 +37,20 @@ public class MCEFDownloaderMenu extends Screen {
     }
 
     @Override
-    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        renderBackground(graphics, mouseX, mouseY, partialTick);
+    public void extractRenderState(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+        // Background is drawn automatically by Screen#extractRenderStateWithTooltipAndSubtitles
         double cx = width / 2d;
         double cy = height / 2d;
 
         double progressBarHeight = 14;
         double progressBarWidth = width / 3d; // TODO: base off screen with (1/3 of screen)
 
-        PoseStack poseStack = graphics.pose();
+        Matrix3x2fStack poseStack = graphics.pose();
 
         /* Draw Progress Bar */
-        poseStack.pushPose();
-        poseStack.translate(cx, cy, 0);
-        poseStack.translate(-progressBarWidth / 2d, -progressBarHeight / 2d, 0);
+        poseStack.pushMatrix();
+        poseStack.translate((float) cx, (float) cy);
+        poseStack.translate((float) (-progressBarWidth / 2d), (float) (-progressBarHeight / 2d));
         graphics.fill( // bar border
                 0, 0,
                 (int) progressBarWidth,
@@ -69,7 +69,7 @@ public class MCEFDownloaderMenu extends Screen {
                 (int) progressBarHeight - 4,
                 -1
         );
-        poseStack.popPose();
+        poseStack.popMatrix();
 
         // putting this here incase I want to re-add a third line later on
         // allows me to generalize the code to not care about line count
@@ -81,14 +81,10 @@ public class MCEFDownloaderMenu extends Screen {
         /* Draw Text */
         // calculate offset for the top line
         int oSet = ((font.lineHeight / 2) + ((font.lineHeight + 2) * (text.length + 2))) + 4;
-        poseStack.pushPose();
-        poseStack.translate(
-                (int) (cx),
-                (int) (cy - oSet),
-                0
-        );
+        poseStack.pushMatrix();
+        poseStack.translate((float) cx, (float) (cy - oSet));
         // draw menu name
-        graphics.drawString(
+        graphics.text(
                 font,
                 ChatFormatting.GOLD + title.getString(),
                 (int) -(font.width(title.getString()) / 2d), 0,
@@ -98,11 +94,11 @@ public class MCEFDownloaderMenu extends Screen {
         int index = 0;
         for (String s : text) {
             if (index == 1) {
-                poseStack.translate(0, font.lineHeight + 2, 0);
+                poseStack.translate(0, font.lineHeight + 2);
             }
 
-            poseStack.translate(0, font.lineHeight + 2, 0);
-            graphics.drawString(
+            poseStack.translate(0, font.lineHeight + 2);
+            graphics.text(
                     font,
                     s,
                     (int) -(font.width(s) / 2d), 0,
@@ -110,7 +106,7 @@ public class MCEFDownloaderMenu extends Screen {
             );
             index++;
         }
-        poseStack.popPose();
+        poseStack.popMatrix();
 
         // TODO: if listener.isFailed(), draw some "Failed to initialize MCEF" text with an "OK" button to proceed
     }
@@ -119,7 +115,7 @@ public class MCEFDownloaderMenu extends Screen {
     public void tick() {
         if (MCEFDownloadListener.INSTANCE.isDone() || MCEFDownloadListener.INSTANCE.isFailed()) {
             onClose();
-            Minecraft.getInstance().setScreen(menu);
+            Minecraft.getInstance().gui.setScreen(menu);
         }
     }
 

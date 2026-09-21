@@ -234,7 +234,11 @@ public final class MCEF {
      */
     static long getGLFWCursorHandle(CefCursorType cursorType) {
         if (CEF_TO_GLFW_CURSORS.containsKey(cursorType)) return CEF_TO_GLFW_CURSORS.get(cursorType);
-        long glfwCursorHandle = GLFW.glfwCreateStandardCursor(cursorType.glfwId);
+        // Many CefCursorTypes (e.g. the default POINTER arrow) have no GLFW standard-cursor
+        // equivalent and are mapped to glfwId 0. glfwCreateStandardCursor(0) is not a valid
+        // call and raises a GL error; a handle of 0 passed to glfwSetCursor already means
+        // "reset to the system default cursor", so skip creation for those entirely.
+        long glfwCursorHandle = cursorType.glfwId == 0 ? 0 : GLFW.glfwCreateStandardCursor(cursorType.glfwId);
         CEF_TO_GLFW_CURSORS.put(cursorType, glfwCursorHandle);
         return glfwCursorHandle;
     }

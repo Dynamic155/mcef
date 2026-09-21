@@ -33,7 +33,7 @@ public class MCEFExampleMod {
 
     public static final KeyMapping KEY_MAPPING = new KeyMapping(
             "Open Browser", InputConstants.Type.KEYSYM,
-            GLFW.GLFW_KEY_F10, "key.categories.misc"
+            GLFW.GLFW_KEY_F10, KeyMapping.Category.MISC
     );
 
     public MCEFExampleMod() {
@@ -42,9 +42,9 @@ public class MCEFExampleMod {
 
     public void onTick(ClientTickEvent.Post event) {
         // Check if our key was pressed and make sure the ExampleScreen isn't already open
-        if (KEY_MAPPING.isDown() && !(minecraft.screen instanceof ExampleScreen)) {
+        if (KEY_MAPPING.isDown() && !(minecraft.gui.screen() instanceof ExampleScreen)) {
             // Display the ExampleScreen web browser
-            minecraft.setScreen(new ExampleScreen(
+            minecraft.gui.setScreen(new ExampleScreen(
                     Component.literal("Example Screen")
             ));
         }

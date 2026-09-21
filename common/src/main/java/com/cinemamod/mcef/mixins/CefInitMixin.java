@@ -24,12 +24,13 @@ import com.cinemamod.mcef.MCEF;
 import com.cinemamod.mcef.internal.MCEFDownloadListener;
 import com.cinemamod.mcef.internal.MCEFDownloaderMenu;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Gui;
 import net.minecraft.client.gui.screens.*;
 import net.minecraft.client.gui.screens.multiplayer.JoinMultiplayerScreen;
 import net.minecraft.client.gui.screens.multiplayer.SafetyScreen;
 import net.minecraft.client.gui.screens.packs.PackSelectionScreen;
+import net.minecraft.client.gui.screens.worldselection.AbstractGameRulesScreen;
 import net.minecraft.client.gui.screens.worldselection.CreateWorldScreen;
-import net.minecraft.client.gui.screens.worldselection.EditGameRulesScreen;
 import net.minecraft.client.gui.screens.worldselection.ExperimentsScreen;
 import net.minecraft.client.gui.screens.worldselection.SelectWorldScreen;
 import org.jetbrains.annotations.Nullable;
@@ -42,7 +43,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
-@Mixin(Minecraft.class)
+// Screen opening moved from Minecraft#setScreen to Gui#setScreen (Minecraft.gui) in this version.
+@Mixin(Gui.class)
 public abstract class CefInitMixin {
     @Shadow
     public abstract void setScreen(@Nullable Screen guiScreen);
@@ -65,16 +67,16 @@ public abstract class CefInitMixin {
                     !recursionValue ||
                             guiScreen instanceof TitleScreen ||
                             guiScreen instanceof LevelLoadingScreen ||
-                            guiScreen instanceof ReceivingLevelScreen ||
+                            // ReceivingLevelScreen no longer exists in this version; LevelLoadingScreen above covers it
                             guiScreen instanceof SelectWorldScreen ||
                             guiScreen instanceof DirectJoinServerScreen ||
-                            guiScreen instanceof EditServerScreen ||
+                            guiScreen instanceof ManageServerScreen || // formerly EditServerScreen
                             guiScreen instanceof ConnectScreen ||
                             guiScreen instanceof AccessibilityOnboardingScreen ||
                             guiScreen instanceof SafetyScreen ||
                             guiScreen instanceof JoinMultiplayerScreen ||
                             guiScreen instanceof CreateWorldScreen ||
-                            guiScreen instanceof EditGameRulesScreen ||
+                            guiScreen instanceof AbstractGameRulesScreen || // formerly EditGameRulesScreen
                             guiScreen instanceof ExperimentsScreen ||
                             guiScreen instanceof PackSelectionScreen ||
                             guiScreen instanceof CreateFlatWorldScreen ||

@@ -1,20 +1,20 @@
+// NOTE: this module previously applied 'fabric-loom' so its sources could compile against
+// Fabric's officially-mapped Minecraft artifact. As of this Minecraft version, Fabric Loom's
+// bundled ASM can't yet parse Minecraft 26.2's class files (there is no Fabric toolchain
+// support for 26.2 yet), so :common is a plain java-library for now. Its main/jcef sources are
+// compiled directly into :neoforge (see neoforge/build.gradle), which supplies the real
+// Minecraft classpath via its own NeoForge dependency -- :common's own compileJava is not part
+// of that path and is not expected to succeed standalone until the fabric module comes back.
 plugins {
-    id 'fabric-loom'
+    id 'java-library'
     id 'maven-publish'
     id 'idea'
 }
 
-sourceCompatibility = JavaLanguageVersion.of(java_version as int)
-targetCompatibility = JavaLanguageVersion.of(java_version as int)
+java.toolchain.languageVersion = JavaLanguageVersion.of(java_version as int)
 
 repositories {
     mavenCentral()
-    maven { url = 'https://maven.fabricmc.net/' }
-    mavenLocal()
-    maven {
-        name = 'ParchmentMC'
-        url = 'https://maven.parchmentmc.org'
-    }
 }
 
 /*
@@ -43,15 +43,6 @@ publishing {
             version = mcef_version
         }
     }
-}
-
-dependencies {
-    minecraft "com.mojang:minecraft:${minecraft_version}"
-    mappings loom.layered() {
-        officialMojangMappings()
-        parchment("org.parchmentmc.data:parchment-1.21:2024.07.28@zip")
-    }
-    modImplementation "net.fabricmc:fabric-loader:${fabric_loader_version}"
 }
 
 sourceSets {

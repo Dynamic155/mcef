@@ -20,13 +20,21 @@
 
 package com.cinemamod.mcef;
 
+import com.cinemamod.mcef.example.ExampleScreen;
 import com.cinemamod.mcef.example.MCEFExampleMod;
+import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.logging.LogUtils;
+import net.minecraft.client.Minecraft;
+import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.network.chat.Component;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 import net.neoforged.fml.event.lifecycle.FMLDedicatedServerSetupEvent;
 import net.neoforged.fml.loading.FMLEnvironment;
+import net.neoforged.neoforge.client.event.RegisterClientCommandsEvent;
+import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
+import net.neoforged.neoforge.common.NeoForge;
 import org.slf4j.Logger;
 
 @Mod(NeoForgeMCEFMod.MODID)
@@ -37,11 +45,37 @@ public class NeoForgeMCEFMod {
     public NeoForgeMCEFMod(IEventBus modEventBus) {
         modEventBus.addListener(this::clientSetup);
         modEventBus.addListener(this::serverSetup);
+        modEventBus.addListener(this::registerKeyMappings);
+        NeoForge.EVENT_BUS.addListener(this::registerClientCommands);
+    }
+
+    private void registerClientCommands(final RegisterClientCommandsEvent event) {
+        // /mcefdemo opens the demo browser directly -- useful for testing since it doesn't
+        // depend on the F10 key mapping actually being routed to the game (that registration
+        // succeeds per the game's own log, but the key press itself doesn't seem to reach
+        // KeyMapping#isDown(); left as a known issue in the upstream demo code for now).
+        if (!FMLEnvironment.isProduction()) {
+            event.getDispatcher().register(
+                    LiteralArgumentBuilder.<CommandSourceStack>literal("mcefdemo")
+                            .executes(ctx -> {
+                                Minecraft.getInstance().gui.setScreen(new ExampleScreen(
+                                        Component.literal("Example Screen")
+                                ));
+                                return 1;
+                            })
+            );
+        }
     }
 
     private void clientSetup(final FMLClientSetupEvent event) {
-        if (!FMLEnvironment.production) {
+        if (!FMLEnvironment.isProduction()) {
             new MCEFExampleMod();
+        }
+    }
+
+    private void registerKeyMappings(final RegisterKeyMappingsEvent event) {
+        if (!FMLEnvironment.isProduction()) {
+            event.register(MCEFExampleMod.KEY_MAPPING);
         }
     }
 

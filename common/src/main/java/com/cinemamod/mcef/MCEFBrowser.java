@@ -21,10 +21,8 @@
 package com.cinemamod.mcef;
 
 import com.cinemamod.mcef.listeners.MCEFCursorChangeListener;
-import com.mojang.blaze3d.opengl.GlStateManager;
-import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.Minecraft;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
 import org.cef.browser.CefBrowser;
 import org.cef.browser.CefBrowserOsr;
 import org.cef.callback.CefDragData;
@@ -39,11 +37,7 @@ import org.lwjgl.system.libc.LibCString;
 import java.awt.*;
 import java.nio.ByteBuffer;
 
-import static org.lwjgl.opengl.GL11.*;
-import static org.lwjgl.opengl.GL12.*;
-
 import static org.lwjgl.glfw.GLFW.*;
-import static org.lwjgl.opengl.GL11.*;
 
 /**
  * An instance of an "Off-screen rendered" Chromium web browser.
@@ -101,12 +95,12 @@ public class MCEFBrowser extends CefBrowserOsr {
     }
     
     /**
-     * Convenience method to get the ResourceLocation for this browser's texture.
+     * Convenience method to get the Identifier for this browser's texture.
      * This can be used directly with GuiGraphics rendering methods.
      * 
-     * @return The ResourceLocation for this browser's texture, or null if not initialized
+     * @return The Identifier for this browser's texture, or null if not initialized
      */
-    public ResourceLocation getTextureLocation() {
+    public Identifier getTextureLocation() {
         return renderer != null ? renderer.getTextureLocation() : null;
     }
     
@@ -180,42 +174,29 @@ public class MCEFBrowser extends CefBrowserOsr {
                 renderer.onPaint(buffer, width, height);
             } else {
                 if (renderer.getTextureID() == 0) return;
-                GlStateManager._bindTexture(renderer.getTextureID());
-                GlStateManager._pixelStore(GL_UNPACK_ROW_LENGTH, width);
                 for (Rectangle dirtyRect : dirtyRects) {
-                    GlStateManager._pixelStore(GL_UNPACK_SKIP_PIXELS, dirtyRect.x);
-                    GlStateManager._pixelStore(GL_UNPACK_SKIP_ROWS, dirtyRect.y);
-                    renderer.onPaint(buffer, dirtyRect.x, dirtyRect.y, dirtyRect.width, dirtyRect.height);
+                    renderer.onPaint(buffer, width, dirtyRect.x, dirtyRect.y, dirtyRect.x, dirtyRect.y, dirtyRect.width, dirtyRect.height);
                 }
                 if ((popupDrawn || showPopup) && popupSize != null) {
                     // interpret where the popup was as a dirty rect
                     if (!showPopup) {
                         // if the popup is not visible, just draw the contents of the buffer
-                        GlStateManager._pixelStore(GL_UNPACK_SKIP_PIXELS, popupSize.width);
-                        GlStateManager._pixelStore(GL_UNPACK_SKIP_ROWS, popupSize.height);
-                        renderer.onPaint(buffer, popupSize.x, popupSize.y, popupSize.width, popupSize.height);
+                        renderer.onPaint(buffer, width, popupSize.width, popupSize.height, popupSize.x, popupSize.y, popupSize.width, popupSize.height);
                         popupGraphics = null;
                         popupSize = null;
                     } else if (popupDrawn) {
                         // else, a use copy of the popup graphics, as it needs to remain visible
                         // and for some reason that I do not for the life of me understand, chromium does not seem to keep this data in memory outside of the paint loop, meaning it has to be copied around, which wastes performance
-                        GlStateManager._pixelStore(GL_UNPACK_ROW_LENGTH, popupSize.width);
-                        GlStateManager._pixelStore(GL_UNPACK_SKIP_PIXELS, 0);
-                        GlStateManager._pixelStore(GL_UNPACK_SKIP_ROWS, 0);
-                        renderer.onPaint(popupGraphics, popupSize.x, popupSize.y, popupSize.width, popupSize.height);
+                        renderer.onPaint(popupGraphics, popupSize.width, 0, 0, popupSize.x, popupSize.y, popupSize.width, popupSize.height);
                     }
                 }
             }
         } else {
             if (renderer.getTextureID() == 0) return;
-            GlStateManager._bindTexture(renderer.getTextureID());
             int start = buffer.capacity();
             int end = 0;
             for (Rectangle dirtyRect : dirtyRects) {
-                GlStateManager._pixelStore(GL_UNPACK_ROW_LENGTH, popupSize.width);
-                GlStateManager._pixelStore(GL_UNPACK_SKIP_PIXELS, dirtyRect.x);
-                GlStateManager._pixelStore(GL_UNPACK_SKIP_ROWS, dirtyRect.y);
-                renderer.onPaint(buffer, popupSize.x + dirtyRect.x, popupSize.y + dirtyRect.y, dirtyRect.width, dirtyRect.height);
+                renderer.onPaint(buffer, popupSize.width, dirtyRect.x, dirtyRect.y, popupSize.x + dirtyRect.x, popupSize.y + dirtyRect.y, dirtyRect.width, dirtyRect.height);
 
                 int rectStart = (dirtyRect.x + ((dirtyRect.y) * popupSize.width)) << 2;
                 if (rectStart < start) start = rectStart;
@@ -447,10 +428,10 @@ public class MCEFBrowser extends CefBrowserOsr {
 
     public void setCursor(CefCursorType cursorType) {
         if (cursorType == CefCursorType.NONE) {
-            GLFW.glfwSetInputMode(Minecraft.getInstance().getWindow().getWindow(), GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
+            GLFW.glfwSetInputMode(Minecraft.getInstance().getWindow().handle(), GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
         } else {
-            GLFW.glfwSetInputMode(Minecraft.getInstance().getWindow().getWindow(), GLFW_CURSOR, GLFW_CURSOR_NORMAL);
-            GLFW.glfwSetCursor(Minecraft.getInstance().getWindow().getWindow(), MCEF.getGLFWCursorHandle(cursorType));
+            GLFW.glfwSetInputMode(Minecraft.getInstance().getWindow().handle(), GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+            GLFW.glfwSetCursor(Minecraft.getInstance().getWindow().handle(), MCEF.getGLFWCursorHandle(cursorType));
         }
     }
 }

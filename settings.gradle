@@ -8,4 +8,6 @@ pluginManagement {
 }
 
 rootProject.name = 'mcef'
-include('common', 'fabric', 'neoforge')
+// 'fabric' is temporarily dropped: it applies fabric-loom, which can't parse Minecraft 26.2's
+// class files yet (no Fabric toolchain support for this version). Re-add once Loom catches up.
+include('common', 'neoforge')

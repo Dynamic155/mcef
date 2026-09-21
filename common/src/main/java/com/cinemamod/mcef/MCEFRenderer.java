@@ -20,36 +20,41 @@
 
 package com.cinemamod.mcef;
 
-import com.mojang.blaze3d.opengl.GlStateManager;
+import com.mojang.blaze3d.GpuFormat;
 import com.mojang.blaze3d.opengl.GlTexture;
+import com.mojang.blaze3d.systems.GpuDevice;
 import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.textures.FilterMode;
 import com.mojang.blaze3d.textures.GpuTexture;
-import com.mojang.blaze3d.textures.TextureFormat;
+import com.mojang.blaze3d.textures.GpuTextureView;
 import net.minecraft.client.Minecraft;
-import net.minecraft.resources.ResourceLocation;
+import net.minecraft.resources.Identifier;
+import org.lwjgl.system.MemoryUtil;
 
 import java.nio.ByteBuffer;
 import java.util.UUID;
 
-import static org.lwjgl.opengl.GL12.*;
-
 public class MCEFRenderer {
     private final boolean transparent;
     private GpuTexture texture;
+    private GpuTextureView textureView;
     private int textureWidth = 0;
     private int textureHeight = 0;
-    
-    // ResourceLocation for this renderer's texture
-    private ResourceLocation textureLocation;
+
+    // Identifier for this renderer's texture
+    private final Identifier textureLocation;
     private MCEFDirectTexture directTexture;
     private boolean textureRegistered = false;
 
+    // Reusable native scratch buffer. CEF hands us BGRA8 frame data that may be a sub-rectangle
+    // of a larger, strided source buffer; GpuDevice#writeToTexture requires a tightly-packed RGBA8
+    // region with no stride/skip support, so every paint gets repacked into this buffer first.
+    private ByteBuffer scratch;
+
     protected MCEFRenderer(boolean transparent) {
         this.transparent = transparent;
-        // Generate a unique ResourceLocation for this renderer
+        // Generate a unique Identifier for this renderer
         String uniqueId = UUID.randomUUID().toString().toLowerCase().replace("-", "");
-        this.textureLocation = ResourceLocation.fromNamespaceAndPath("mcef", "browser_" + uniqueId);
+        this.textureLocation = Identifier.fromNamespaceAndPath("mcef", "browser_" + uniqueId);
     }
 
     public void initialize() {
@@ -62,34 +67,34 @@ public class MCEFRenderer {
     public GpuTexture getTexture() {
         return texture;
     }
-    
+
     /**
-     * Gets the ResourceLocation that can be used with GuiGraphics and other Minecraft rendering methods.
-     * This ResourceLocation is registered with the TextureManager and points to the browser's texture.
+     * Gets the Identifier that can be used with GuiGraphics and other Minecraft rendering methods.
+     * This Identifier is registered with the TextureManager and points to the browser's texture.
      */
-    public ResourceLocation getTextureLocation() {
+    public Identifier getTextureLocation() {
         return textureLocation;
     }
-    
+
     /**
      * Check if the texture is ready for rendering with GuiGraphics
      */
     public boolean isTextureReady() {
         return texture != null && textureRegistered && directTexture != null;
     }
-    
+
     public int getTextureID() {
         // For compatibility, return the OpenGL ID if texture exists
-        if (texture instanceof GlTexture) {
-            return ((GlTexture) texture).glId();
+        if (texture instanceof GlTexture glTexture) {
+            return glTexture.glId();
         }
         return 0;
     }
-    
+
     public int getTextureWidth() {
         return textureWidth;
     }
-    
+
     public int getTextureHeight() {
         return textureHeight;
     }
@@ -103,63 +108,98 @@ public class MCEFRenderer {
             texture.close();
             texture = null;
         }
-        
+        if (textureView != null) {
+            textureView.close();
+            textureView = null;
+        }
+
         // Unregister from TextureManager
         if (textureRegistered && textureLocation != null) {
             Minecraft.getInstance().getTextureManager().release(textureLocation);
             textureRegistered = false;
         }
+
+        if (scratch != null) {
+            MemoryUtil.memFree(scratch);
+            scratch = null;
+        }
     }
 
+    /**
+     * Full-frame paint. (Re)creates the backing texture if the size changed.
+     */
     protected void onPaint(ByteBuffer buffer, int width, int height) {
-        // Create or recreate texture if size changed
         if (texture == null || textureWidth != width || textureHeight != height) {
-            if (texture != null) {
-                texture.close();
-            }
-            
-            // Create new GpuTexture using the device
+            if (texture != null) texture.close();
+            if (textureView != null) textureView.close();
+
+            GpuDevice device = RenderSystem.getDevice();
             String label = "MCEF Browser Texture " + width + "x" + height;
-            texture = RenderSystem.getDevice().createTexture(
-                label,
-                TextureFormat.RGBA8,
-                width,
-                height,
-                1  // mipLevels
+            texture = device.createTexture(
+                    label,
+                    GpuTexture.USAGE_TEXTURE_BINDING | GpuTexture.USAGE_COPY_DST,
+                    GpuFormat.RGBA8_UNORM,
+                    width,
+                    height,
+                    1,  // depthOrLayers
+                    1   // mipLevels
             );
-            
-            // Configure texture parameters
-            texture.setTextureFilter(FilterMode.LINEAR, FilterMode.LINEAR, false);
-            texture.setAddressMode(com.mojang.blaze3d.textures.AddressMode.CLAMP_TO_EDGE);
-            
+            textureView = device.createTextureView(texture);
+
             textureWidth = width;
             textureHeight = height;
-            
-            // Update the direct texture wrapper to point to our new texture
-            if (directTexture != null && texture instanceof GlTexture glTexture) {
-                directTexture.setDirectTextureId(glTexture.glId(), width, height);
+
+            // Point the direct texture wrapper at our new texture/view
+            if (directTexture != null) {
+                directTexture.setBackingTexture(texture, textureView);
             }
         }
-        
-        if (texture instanceof GlTexture glTexture) {
-            // Bind the texture directly using its GL ID
-            GlStateManager._bindTexture(glTexture.glId());
-            GlStateManager._pixelStore(GL_UNPACK_ROW_LENGTH, width);
-            GlStateManager._pixelStore(GL_UNPACK_SKIP_PIXELS, 0);
-            GlStateManager._pixelStore(GL_UNPACK_SKIP_ROWS, 0);
-            
-            // Upload the full texture
-            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0,
-                    GL_BGRA, GL_UNSIGNED_INT_8_8_8_8_REV, buffer);
-        }
+
+        writeRegion(buffer, width, 0, 0, 0, 0, width, height);
     }
 
-    protected void onPaint(ByteBuffer buffer, int x, int y, int width, int height) {
-        if (texture instanceof GlTexture glTexture) {
-            // Bind and update sub-region
-            GlStateManager._bindTexture(glTexture.glId());
-            glTexSubImage2D(GL_TEXTURE_2D, 0, x, y, width, height, GL_BGRA,
-                    GL_UNSIGNED_INT_8_8_8_8_REV, buffer);
+    /**
+     * Partial (dirty-rect) paint into the existing texture.
+     *
+     * @param buffer       the source frame buffer (may be larger than the region being written)
+     * @param bufferStride the width, in pixels, of a row in {@code buffer}
+     * @param srcX         the x offset, in pixels, of the region within {@code buffer}
+     * @param srcY         the y offset, in pixels, of the region within {@code buffer}
+     * @param destX        the x offset, in pixels, within the destination texture
+     * @param destY        the y offset, in pixels, within the destination texture
+     */
+    protected void onPaint(ByteBuffer buffer, int bufferStride, int srcX, int srcY, int destX, int destY, int width, int height) {
+        if (texture == null) return;
+        writeRegion(buffer, bufferStride, srcX, srcY, destX, destY, width, height);
+    }
+
+    private void writeRegion(ByteBuffer buffer, int bufferStride, int srcX, int srcY, int destX, int destY, int width, int height) {
+        if (width <= 0 || height <= 0) return;
+
+        int needed = width * height * 4;
+        if (scratch == null || scratch.capacity() < needed) {
+            if (scratch != null) MemoryUtil.memFree(scratch);
+            scratch = MemoryUtil.memAlloc(needed);
         }
+        scratch.clear();
+        scratch.limit(needed);
+
+        // Repack the requested sub-rectangle into a tightly-packed buffer, swapping CEF's
+        // BGRA8 byte order to the RGBA8 order our GpuFormat.RGBA8_UNORM texture expects.
+        for (int row = 0; row < height; row++) {
+            int srcRowStart = ((srcY + row) * bufferStride + srcX) * 4;
+            for (int col = 0; col < width; col++) {
+                int srcIndex = srcRowStart + col * 4;
+                byte b = buffer.get(srcIndex);
+                byte g = buffer.get(srcIndex + 1);
+                byte r = buffer.get(srcIndex + 2);
+                byte a = buffer.get(srcIndex + 3);
+                scratch.put(r).put(g).put(b).put(a);
+            }
+        }
+        scratch.flip();
+
+        RenderSystem.getDevice().createCommandEncoder()
+                .writeToTexture(texture, scratch, 0, 0, destX, destY, width, height);
     }
 }
